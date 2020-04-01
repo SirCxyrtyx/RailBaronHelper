@@ -1,7 +1,11 @@
 # RailBaronHelper
 
-Webapp to help play Rail Baron.
+Webapp to help play Rail Baron. Rolls destinations and calculates payouts.
 
-Boards currently supported:
+Hosted at: https://sircxyrtyx.github.io/RailBaronHelper/
 
+Maps currently supported:
+
+- United States (standard Rail Baron)
 - Australia
+
