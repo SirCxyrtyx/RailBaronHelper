@@ -11,6 +11,7 @@ const getByID = id => document.getElementById(id),
 
 let btns = [],
 	playerDests = [],
+	numPlayers,
 	currentPlayer,
 	map = MAPS.USA;
 
@@ -29,7 +30,7 @@ function init() {
 
 function selectMap(mapId){
 	btnsClear();
-	
+
 	map = mapId;
 	getByID(Object.keys(MAPS)[mapId]).removeAttribute("visibility");
 
@@ -38,68 +39,36 @@ function selectMap(mapId){
 	}
 }
 
-function button(x, y, color, text, width, height, onClick) {
-    var that = {},
-    	pad = fontpt / 3;
-    that.g = create(getByID("buttons"), "g");
-    that.rect = create(that.g, "rect");
-    that.text = create(that.g, "text");
-    that.get = function (name) {
-        return that.rect.getAttributeNS(null, name);
-    };
-    that.set = function (name, val) {
-        that.rect.setAttributeNS(null, name, val);
-    };
-    that.remove = function () {
-        getByID("buttons").removeChild(that.g);
-    };
-    set(that.text, "x", x + pad * 1.7, "y", y + fontpt + pad + 1, "font-size", fontpt, "font-family", "Segoe", "fill", "White");
-    that.text.appendChild(document.createTextNode(text));
-	that.set("fill", color);
-	
-	that.set("width", width || that.text.getBBox().width + pad * 3);
-	that.set("height", height || that.text.getBBox().height + pad * 2);
-
-    that.set("x", x);
-	that.set("y", y);
-	
-	if (onClick) {
-		that.g.onclick = onClick;
-	}
-    return that;
-}
-
-function setPlayers(numPlayers) {
+function setPlayers(n) {
+	numPlayers = n;
 	btnsClear();
 	for (let i = 0; i < numPlayers; i++) {
-		btns[i] = button(100, 80 + i * 100, "#E01B1B", i + 1, 49, 61);
+		updatePlayerName(i);
 		let fullDest = destination();
-		playerDests[i] = fullDest["city"];
-		btns[i + numPlayers] = button(180, 80 + i * 100, "#111111", playerDests[i], undefined, undefined, () => newDestination(i, fullDest.region));
-		btns[i + numPlayers * 2] = button(420, 80 + i * 100, "#00BA19", "$0")
+		playerDests[i] = fullDest.city;
+		updateDestination(i, fullDest.region);
+		updatePayout(i, 0);
 	};
 }
 
 function newDestination(playerIdx, oldRegion, region) {
 	let oldDest = playerDests[playerIdx],
-		numPlayers = playerDests.length,
 		fullDest;
 	currentPlayer = playerIdx;
 	fullDest = destination(oldRegion, region);
 	if(fullDest === false)
 		return;
-	playerDests[playerIdx] = fullDest["city"];
+	playerDests[playerIdx] = fullDest.city;
 	console.log(fullDest);
-	btns[playerIdx + numPlayers].remove();
-	btns[playerIdx + numPlayers] = button(180, 80 + playerIdx * 100, "#111111", playerDests[playerIdx], undefined, undefined, () => newDestination(playerIdx, fullDest.region));
-	btns[playerIdx + numPlayers * 2].remove();
-	btns[playerIdx + numPlayers * 2] = button(420, 80 + playerIdx * 100, "#00BA19", "$" + payout(oldDest, playerDests[playerIdx]) * 100);
+	updateDestination(playerIdx, fullDest.region);
+	updatePayout(playerIdx, payout(oldDest, playerDests[playerIdx]) * 100);
 }
 
 function btnsClear() {
 	for (var i = btns.length - 1; i >= 0; i--) {
 		btns[i].remove();
 	};
+	btns = [];
 }
 
 function selectRegion(evt) {
@@ -107,6 +76,23 @@ function selectRegion(evt) {
 	set(getByID("map"), "visibility", "hidden");
 	newDestination(currentPlayer, false, region);
 }
+
+function updatePlayerName(i, name) {
+	name = name || `${i + 1}`;
+	btns[i]?.remove();
+	btns[i] = button(100, 80 + i * 100, "#E01B1B", name, undefined, undefined, () => updatePlayerName(i, prompt("Enter player initials")));
+}
+
+function updateDestination(i, region) {
+	btns[i + numPlayers]?.remove();
+	btns[i + numPlayers] = button(200, 80 + i * 100, "#111111", playerDests[i], undefined, undefined, () => newDestination(i, region));
+}
+
+function updatePayout(i, payout){
+	btns[i + numPlayers * 2]?.remove();
+	btns[i + numPlayers * 2] = button(440, 80 + i * 100, "#00BA19", "$" + payout);
+}
+
 /*****************
  utility functions
 ******************/
@@ -141,6 +127,37 @@ function set(element, attr1, val1, etc) {  //after element, attribute and value 
         element.setAttributeNS(null, arguments[i], arguments[i + 1]);
     }
     return element;
+}
+
+function button(x, y, color, text, width, height, onClick) {
+    var that = {},
+    	pad = fontpt / 3;
+    that.g = create(getByID("buttons"), "g");
+    that.rect = create(that.g, "rect");
+    that.text = create(that.g, "text");
+    that.get = function (name) {
+        return that.rect.getAttributeNS(null, name);
+    };
+    that.set = function (name, val) {
+        that.rect.setAttributeNS(null, name, val);
+    };
+    that.remove = function () {
+        getByID("buttons").removeChild(that.g);
+    };
+    set(that.text, "x", x + pad * 1.7, "y", y + fontpt + pad + 1, "font-size", fontpt, "font-family", "Segoe", "fill", "White");
+    that.text.appendChild(document.createTextNode(text));
+	that.set("fill", color);
+	
+	that.set("width", width || that.text.getBBox().width + pad * 3);
+	that.set("height", height || that.text.getBBox().height + pad * 2);
+
+    that.set("x", x);
+	that.set("y", y);
+	
+	if (onClick) {
+		that.g.onclick = onClick;
+	}
+    return that;
 }
 
 
