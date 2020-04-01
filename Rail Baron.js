@@ -1,26 +1,47 @@
 // jshint jquery: true, curly: true, bitwise: true, eqeqeq: true, immed: true, strict: true, unused: vars, devel: true, browser: true, newcap: false
 "use strict";
-const MAPS = {"USA":0, "AUS":1, };
-var SVGNS = "http://www.w3.org/2000/svg",
+
+const getByID = id => document.getElementById(id),
+	getByClass = className => document.getElementsByClassName(className),
+	MAPS = {"USA":0, "AUS":1, }, 
+	mapNames = ["United States", "Australia"],
+	SVGNS = "http://www.w3.org/2000/svg",
 	fontpt = 30,
-	btns = [],
+	root = getByID("root");
+
+let btns = [],
 	playerDests = [],
-	root = document.getElementById("root"),
 	currentPlayer,
 	map = MAPS.USA;
 
 
 function init() {
+	for (let i = 0; i < mapNames.length; i++) {
+		btns[i] = button(100, 80 + i * 100, "#E01B1B", mapNames[i], undefined, undefined, () => selectMap(i));
+	}
+
+	for (const region of getByClass("mapRegion")) {
+		region.onclick = evt => selectRegion(evt);
+		region.onmouseover = region.onmousedown = evt => evt.target.setAttributeNS(null, 'fill', '#5E7BCC');
+		region.onmouseout = evt => evt.target.setAttributeNS(null, 'fill', '#d3d3d3');
+	}
+}
+
+function selectMap(mapId){
+	btnsClear();
+	
+	map = mapId;
+	getByID(Object.keys(MAPS)[mapId]).removeAttribute("visibility");
+
 	for (let i = 0; i < 6; i++) {
 		btns[i] = button(100 + i * 120, 80, "#E01B1B", i + 1, 49, 61, () => setPlayers(i + 1));
 	}
-	map = MAPS.AUS;
 }
 
 function button(x, y, color, text, width, height, onClick) {
     var that = {},
     	pad = fontpt / 3;
-    that.g = create(document.getElementById("buttons"), "g");
+    that.g = create(getByID("buttons"), "g");
     that.rect = create(that.g, "rect");
     that.text = create(that.g, "text");
     that.get = function (name) {
@@ -30,18 +51,15 @@ function button(x, y, color, text, width, height, onClick) {
         that.rect.setAttributeNS(null, name, val);
     };
     that.remove = function () {
-        document.getElementById("buttons").removeChild(that.g);
+        getByID("buttons").removeChild(that.g);
     };
     set(that.text, "x", x + pad * 1.7, "y", y + fontpt + pad + 1, "font-size", fontpt, "font-family", "Segoe", "fill", "White");
     that.text.appendChild(document.createTextNode(text));
-    that.set("fill", color);
-    if(width) {
-    	that.set("width", width);
-    	that.set("height", height);
-    } else {
-    	that.set("width", that.text.getBBox().width + pad * 3);
-    	that.set("height", that.text.getBBox().height + pad * 2);
-    }
+	that.set("fill", color);
+	
+	that.set("width", width || that.text.getBBox().width + pad * 3);
+	that.set("height", height || that.text.getBBox().height + pad * 2);
+
     that.set("x", x);
 	that.set("y", y);
 	
@@ -86,7 +104,7 @@ function btnsClear() {
 
 function selectRegion(evt) {
 	var region = regionFromCode(evt.target.attributes.id.value);
-	set(document.getElementById("map"), "visibility", "hidden");
+	set(getByID("map"), "visibility", "hidden");
 	newDestination(currentPlayer, false, region);
 }
 /*****************
@@ -108,7 +126,7 @@ function isEven() {
 function create(parent, type, id) { //id is optional
     var element = document.createElementNS(SVGNS, type);
     if (typeof parent === 'string') {
-        parent = document.getElementById(parent);
+        parent = getByID(parent);
     }
     if (id) {
         set(element, "id", id);
@@ -125,503 +143,52 @@ function set(element, attr1, val1, etc) {  //after element, attribute and value 
     return element;
 }
 
+
 function payout(city1, city2) {
+	var destIndices, payouts;
 	if (map === MAPS.AUS) {
-		let r = payoutAUS(city1, city2);
-		if (r === undefined) {
-			return payoutAUS(city1, city2);
-		}
-		return r;
+		destIndices = AUS_D;
+		payouts = AUS_payouts;
 	}
-	var payouts = {
-		"San Francisco": {
-			"Los Angeles": 124,
-			"Sacramento": 54,
-			"Billings": 200
-		},
-		"Los Angeles": {
-			"Sacramento": 130,
-			"Billings": 230
-		},
-		"Billings": {
-			"Sacramento": 170
-		}
-	};
-	if(payouts[city1] !== undefined && payouts[city1][city2] !== undefined) {
-		return payouts[city1][city2];
+	else {
+		destIndices = USA_D;
+		payouts = USA_payouts;
+	}
+	
+	let c1 = destIndices[city1],
+		c2 = destIndices[city2];
+	if(payouts[c1] !== undefined && payouts[c1][c2] !== undefined) {
+		return payouts[c1][c2];
 	} else {
-		return payouts[city2][city1];
+		return payouts[c2][c1];
 	}
 	
 }
 
 function destination(previous, region) {
-
+	var regionLookup, cityNames, destLookup;
 	if (map == MAPS.AUS) {
-		return destinationAUS(previous, region);
+		regionLookup = AUS_lookup_region;
+		cityNames = AUS_cityNames;
+		destLookup = AUS_lookup_dest;
+	}
+	else {
+		regionLookup = USA_lookup_region;
+		cityNames = USA_cityNames;
+		destLookup = USA_lookup_dest;
 	}
 
-	var roll1,
-		roll2,
-		dest;
-	if(!region) {
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				region = "Plains";
-			} else if(roll2 === 3){
-				region = "Southeast";
-			} else if(roll2 === 4) {
-				region = "Southeast";
-			} else if(roll2 === 5) {
-				region = "Southeast";
-			} else if(roll2 === 6) {
-				region = "North Central";
-			} else if(roll2 === 7) {
-				region = "North Central";
-			} else if(roll2 === 8) {
-				region = "Northeast";
-			} else if(roll2 === 9) {
-				region = "Northeast";
-			} else if(roll2 === 10) {
-				region = "Northeast";
-			} else if(roll2 === 11) {
-				region = "Northeast";
-			} else if(roll2 === 12) {
-				region = "Northeast";
-			}
-		} else {
-			if(roll2 === 2) {
-				region = "Southwest";
-			} else if(roll2 === 3){
-				region = "South Central";
-			} else if(roll2 === 4) {
-				region = "South Central";
-			} else if(roll2 === 5) {
-				region = "South Central";
-			} else if(roll2 === 6) {
-				region = "Southwest";
-			} else if(roll2 === 7) {
-				region = "Southwest";
-			} else if(roll2 === 8) {
-				region = "Plains";
-			} else if(roll2 === 9) {
-				region = "Northwest";
-			} else if(roll2 === 10) {
-				region = "Northwest";
-			} else if(roll2 === 11) {
-				region = "Plains";
-			} else if(roll2 === 12) {
-				region = "Northwest";
-			}
-		}
-	}
-	if(previous === region) {
-		set(document.getElementById("map"), "visibility", "visible");
-		return false;
-	}
-	if(region === "Northeast"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "New York";
-			} else if(roll2 === 3){
-				dest = "New York";
-			} else if(roll2 === 4) {
-				dest = "New York";
-			} else if(roll2 === 5) {
-				dest = "Albany";
-			} else if(roll2 === 6) {
-				dest = "Boston";
-			} else if(roll2 === 7) {
-				dest = "Buffalo";
-			} else if(roll2 === 8) {
-				dest = "Boston";
-			} else if(roll2 === 9) {
-				dest = "Portland";
-			} else if(roll2 === 10) {
-				dest = "New York";
-			} else if(roll2 === 11) {
-				dest = "New York";
-			} else if(roll2 === 12) {
-				dest = "New York";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "New York";
-			} else if(roll2 === 3){
-				dest = "Washington";
-			} else if(roll2 === 4) {
-				dest = "Pittsburgh";
-			} else if(roll2 === 5) {
-				dest = "Pittsburgh";
-			} else if(roll2 === 6) {
-				dest = "Philadelphia";
-			} else if(roll2 === 7) {
-				dest = "Washington";
-			} else if(roll2 === 8) {
-				dest = "Philadelphia";
-			} else if(roll2 === 9) {
-				dest = "Baltimore";
-			} else if(roll2 === 10) {
-				dest = "Baltimore";
-			} else if(roll2 === 11) {
-				dest = "Baltimore";
-			} else if(roll2 === 12) {
-				dest = "New York";
-			}
-		}
-	}
-	if(region === "Southeast"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "Charlotte";
-			} else if(roll2 === 3){
-				dest = "Charlotte";
-			} else if(roll2 === 4) {
-				dest = "Chattanooga";
-			} else if(roll2 === 5) {
-				dest = "Atlanta";
-			} else if(roll2 === 6) {
-				dest = "Atlanta";
-			} else if(roll2 === 7) {
-				dest = "Atlanta";
-			} else if(roll2 === 8) {
-				dest = "Richmond";
-			} else if(roll2 === 9) {
-				dest = "Knoxville";
-			} else if(roll2 === 10) {
-				dest = "Mobile";
-			} else if(roll2 === 11) {
-				dest = "Knoxville";
-			} else if(roll2 === 12) {
-				dest = "Mobile";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "Norfolk";
-			} else if(roll2 === 3){
-				dest = "Norfolk";
-			} else if(roll2 === 4) {
-				dest = "Norfolk";
-			} else if(roll2 === 5) {
-				dest = "Charleston";
-			} else if(roll2 === 6) {
-				dest = "Miami";
-			} else if(roll2 === 7) {
-				dest = "Jacksonville";
-			} else if(roll2 === 8) {
-				dest = "Miami";
-			} else if(roll2 === 9) {
-				dest = "Tampa";
-			} else if(roll2 === 10) {
-				dest = "Tampa";
-			} else if(roll2 === 11) {
-				dest = "Mobile";
-			} else if(roll2 === 12) {
-				dest = "Norfolk";
-			}
-		}
-	}
-	if(region === "North Central"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "Cleveland";
-			} else if(roll2 === 3){
-				dest = "Cleveland";
-			} else if(roll2 === 4) {
-				dest = "Cleveland";
-			} else if(roll2 === 5) {
-				dest = "Cleveland";
-			} else if(roll2 === 6) {
-				dest = "Detroit";
-			} else if(roll2 === 7) {
-				dest = "Detroit";
-			} else if(roll2 === 8) {
-				dest = "Indianapolis";
-			} else if(roll2 === 9) {
-				dest = "Milwaukee";
-			} else if(roll2 === 10) {
-				dest = "Milwaukee";
-			} else if(roll2 === 11) {
-				dest = "Chicago";
-			} else if(roll2 === 12) {
-				dest = "Milwaukee";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "Cincinnati";
-			} else if(roll2 === 3){
-				dest = "Chicago";
-			} else if(roll2 === 4) {
-				dest = "Cincinnati";
-			} else if(roll2 === 5) {
-				dest = "Cincinnati";
-			} else if(roll2 === 6) {
-				dest = "Columbus";
-			} else if(roll2 === 7) {
-				dest = "Chicago";
-			} else if(roll2 === 8) {
-				dest = "Chicago";
-			} else if(roll2 === 9) {
-				dest = "St. Louis";
-			} else if(roll2 === 10) {
-				dest = "St. Louis";
-			} else if(roll2 === 11) {
-				dest = "St. Louis";
-			} else if(roll2 === 12) {
-				dest = "Chicago";
-			}
-		}
-	}
-	if(region === "South Central"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "Memphis";
-			} else if(roll2 === 3){
-				dest = "Memphis";
-			} else if(roll2 === 4) {
-				dest = "Memphis";
-			} else if(roll2 === 5) {
-				dest = "Little Rock";
-			} else if(roll2 === 6) {
-				dest = "New Orleans";
-			} else if(roll2 === 7) {
-				dest = "Birmingham";
-			} else if(roll2 === 8) {
-				dest = "Louisville";
-			} else if(roll2 === 9) {
-				dest = "Nashville";
-			} else if(roll2 === 10) {
-				dest = "Nashville";
-			} else if(roll2 === 11) {
-				dest = "Louisville";
-			} else if(roll2 === 12) {
-				dest = "Memphis";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "Shreveport";
-			} else if(roll2 === 3){
-				dest = "Shreveport";
-			} else if(roll2 === 4) {
-				dest = "Dallas";
-			} else if(roll2 === 5) {
-				dest = "New Orleans";
-			} else if(roll2 === 6) {
-				dest = "Dallas";
-			} else if(roll2 === 7) {
-				dest = "San Antonio";
-			} else if(roll2 === 8) {
-				dest = "Houston";
-			} else if(roll2 === 9) {
-				dest = "Houston";
-			} else if(roll2 === 10) {
-				dest = "Fort Worth";
-			} else if(roll2 === 11) {
-				dest = "Fort Worth";
-			} else if(roll2 === 12) {
-				dest = "Fort Worth";
-			}
-		}
-	}
-	if(region === "Plains"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "Kansas City";
-			} else if(roll2 === 3){
-				dest = "Kansas City";
-			} else if(roll2 === 4) {
-				dest = "Denver";
-			} else if(roll2 === 5) {
-				dest = "Denver";
-			} else if(roll2 === 6) {
-				dest = "Denver";
-			} else if(roll2 === 7) {
-				dest = "Kansas City";
-			} else if(roll2 === 8) {
-				dest = "Kansas City";
-			} else if(roll2 === 9) {
-				dest = "Kansas City";
-			} else if(roll2 === 10) {
-				dest = "Pueblo";
-			} else if(roll2 === 11) {
-				dest = "Pueblo";
-			} else if(roll2 === 12) {
-				dest = "Oklahoma City";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "Oklahoma City";
-			} else if(roll2 === 3){
-				dest = "St. Paul";
-			} else if(roll2 === 4) {
-				dest = "Minneapolis";
-			} else if(roll2 === 5) {
-				dest = "St. Paul";
-			} else if(roll2 === 6) {
-				dest = "Minneapolis";
-			} else if(roll2 === 7) {
-				dest = "Oklahoma City";
-			} else if(roll2 === 8) {
-				dest = "Des Moines";
-			} else if(roll2 === 9) {
-				dest = "Omaha";
-			} else if(roll2 === 10) {
-				dest = "Omaha";
-			} else if(roll2 === 11) {
-				dest = "Fargo";
-			} else if(roll2 === 12) {
-				dest = "Fargo";
-			}
-		}
-	}
-	if(region === "Northwest"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "Spokane";
-			} else if(roll2 === 3){
-				dest = "Spokane";
-			} else if(roll2 === 4) {
-				dest = "Seattle";
-			} else if(roll2 === 5) {
-				dest = "Seattle";
-			} else if(roll2 === 6) {
-				dest = "Seattle";
-			} else if(roll2 === 7) {
-				dest = "Seattle";
-			} else if(roll2 === 8) {
-				dest = "Rapid City";
-			} else if(roll2 === 9) {
-				dest = "Casper";
-			} else if(roll2 === 10) {
-				dest = "Billings";
-			} else if(roll2 === 11) {
-				dest = "Billings";
-			} else if(roll2 === 12) {
-				dest = "Spokane";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "Spokane";
-			} else if(roll2 === 3){
-				dest = "Salt Lake City";
-			} else if(roll2 === 4) {
-				dest = "Salt Lake City";
-			} else if(roll2 === 5) {
-				dest = "Salt Lake City";
-			} else if(roll2 === 6) {
-				dest = "Portland OR";
-			} else if(roll2 === 7) {
-				dest = "Portland OR";
-			} else if(roll2 === 8) {
-				dest = "Portland OR";
-			} else if(roll2 === 9) {
-				dest = "Pocatello";
-			} else if(roll2 === 10) {
-				dest = "Butte";
-			} else if(roll2 === 11) {
-				dest = "Butte";
-			} else if(roll2 === 12) {
-				dest = "Portland OR";
-			}
-		}
-	}
-	if(region === "Southwest"){
-		roll1 = roll();
-		roll2 = roll(2);
-		if (roll1 % 2) {
-			if(roll2 === 2) {
-				dest = "San Diego";
-			} else if(roll2 === 3){
-				dest = "San Diego";
-			} else if(roll2 === 4) {
-				dest = "Reno";
-			} else if(roll2 === 5) {
-				dest = "San Diego";
-			} else if(roll2 === 6) {
-				dest = "Sacramento";
-			} else if(roll2 === 7) {
-				dest = "Las Vegas";
-			} else if(roll2 === 8) {
-				dest = "Phoenix";
-			} else if(roll2 === 9) {
-				dest = "El Paso";
-			} else if(roll2 === 10) {
-				dest = "Tucumcari";
-			} else if(roll2 === 11) {
-				dest = "Phoenix";
-			} else if(roll2 === 12) {
-				dest = "Phoenix";
-			}
-		} else {
-			if(roll2 === 2) {
-				dest = "Los Angeles";
-			} else if(roll2 === 3){
-				dest = "Oakland";
-			} else if(roll2 === 4) {
-				dest = "Oakland";
-			} else if(roll2 === 5) {
-				dest = "Oakland";
-			} else if(roll2 === 6) {
-				dest = "Los Angeles";
-			} else if(roll2 === 7) {
-				dest = "Los Angeles";
-			} else if(roll2 === 8) {
-				dest = "Los Angeles";
-			} else if(roll2 === 9) {
-				dest = "San Francisco";
-			} else if(roll2 === 10) {
-				dest = "San Francisco";
-			} else if(roll2 === 11) {
-				dest = "San Francisco";
-			} else if(roll2 === 12) {
-				dest = "San Francisco";
-			}
-		}
-	}
-
-	return {
-		"city": dest,
-		"region": region
-	};
-}
-
-function payoutAUS(city1, city2) {
-	let c1 = AUS_D[city1],
-		c2 = AUS_D[city2];
-	
-		if(AUS_payouts[c1] !== undefined && AUS_payouts[c1][c2] !== undefined) {
-			return AUS_payouts[c1][c2];
-		} else {
-			return AUS_payouts[c2][c1];
-		}
-}
-
-function destinationAUS(previous, region){
 	if (region == undefined) {
-		region = AUS_lookup_region[isEven()][roll(2)];
+		region = regionLookup[isEven()][roll(2)];
 	}
 	
 	if(previous === region) {
-		set(document.getElementById("map"), "visibility", "visible");
+		set(getByID("map"), "visibility", "visible");
 		return false;
 	}
 
 	return {
-		"city": AUS_cityNames[AUS_lookup_dest[region][isEven()][roll(2)]],
+		"city": cityNames[destLookup[region][isEven()][roll(2)]],
 		"region": region
 	}
 }
@@ -630,8 +197,316 @@ function regionFromCode(regionCode){
 	if (map === MAPS.AUS) {
 		return AUS_R[regionCode];
 	}
-	return regionCode;
+	return USA_R[regionCode];
 }
+
+function generatePayoutLookup(csv, destinations){
+	let payoutTable  = {};
+	let lines = csv.split('\n');
+	for (const line of lines) {
+		let cells = line.split(',');
+		let cityName = cells.shift();
+		let tmp = {};
+		for (let i = 0; i < cells.length; i++) {
+			let n = parseInt(cells[i], 10);
+			if (!isNaN(n)) {
+				tmp[i] = n;
+			}
+		}
+		payoutTable[destinations[cityName]] = tmp;
+	}
+	return payoutTable;
+}
+
+
+
+/********************
+*      USA Data     *
+*********************/
+
+const USA_R = Object.freeze({'NE':0, 'SE':1, 'NC':2, 'SC':3, 'PL':4, 'NW':5, 'SW':6})
+const USA_regionNames = ["North East", "South East", "North Central", "South Central", "Plains", "North West", "South West"];
+
+const USA_D = Object.freeze({"Albany":0,"Atlanta":1,"Baltimore":2,"Billings":3,"Birmingham":4,"Boston":5,"Buffalo":6,"Butte":7,"Casper":8,"Charleston":9,"Charlotte":10,"Chattanooga":11,"Chicago":12,"Cincinnati":13,"Cleveland":14,"Columbus":15,"Dallas":16,"Denver":17,"Des Moines":18,"Detroit":19,"El Paso":20,"Fargo":21,"Fort Worth":22,"Houston":23,"Indianapolis":24,"Jacksonville":25,"Kansas City":26,"Knoxville":27,"Las Vegas":28,"Little Rock":29,"Los Angeles":30,"Louisville":31,"Memphis":32,"Miami":33,"Milwaukee":34,"Minneapolis":35,"Mobile":36,"Nashville":37,"New Orleans":38,"New York":39,"Norfolk":40,"Oakland":41,"Oklahoma City":42,"Omaha":43,"Philadelphia":44,"Phoenix":45,"Pittsburgh":46,"Pocatello":47,"Portland ME":48,"Portland OR":49,"Pueblo":50,"Rapid City":51,"Reno":52,"Richmond":53,"Sacramento":54,"Salt Lake City":55,"San Antonio":56,"San Diego":57,"San Francisco":58,"Seattle":59,"Shreveport":60,"Spokane":61,"St Louis":62,"St Paul":63,"Tampa":64,"Tucumcari":65,"Washington DC":66});
+const USA_cityNames = Object.keys(USA_D);
+
+//lookups are [even, odd]
+const USA_lookup_region = [
+		[,,USA_R.SW,
+			USA_R.SC,
+			USA_R.SC,
+			USA_R.SC,
+			USA_R.SW,
+			USA_R.SW,
+			USA_R.PL,
+			USA_R.NW,
+			USA_R.NW,
+			USA_R.PL,
+			USA_R.NW],
+		[,,USA_R.PL,
+			USA_R.SE,
+			USA_R.SE,
+			USA_R.SE,
+			USA_R.NC,
+			USA_R.NC,
+			USA_R.NE,
+			USA_R.NE,
+			USA_R.NE,
+			USA_R.NE,
+			USA_R.NE]];
+const USA_lookup_dest = {
+	[USA_R.NE]:[
+		[,, USA_D["New York"],
+			USA_D["Washington DC"],
+			USA_D.Pittsburgh,
+			USA_D.Pittsburgh,
+			USA_D.Philadelphia,
+			USA_D["Washington DC"],
+			USA_D.Philadelphia,
+			USA_D.Baltimore,
+			USA_D.Baltimore,
+			USA_D.Baltimore,
+			USA_D["New York"],
+		],
+		[,, USA_D["New York"],
+			USA_D["New York"],
+			USA_D["New York"],
+			USA_D.Albany,
+			USA_D.Boston,
+			USA_D.Buffalo,
+			USA_D.Boston,
+			USA_D["Portland ME"],
+			USA_D["New York"],
+			USA_D["New York"],
+			USA_D["New York"],
+		]],
+	[USA_R.SE]:[
+		[,, USA_D.Norfolk,
+			USA_D.Norfolk,
+			USA_D.Norfolk,
+			USA_D.Charleston,
+			USA_D.Miami,
+			USA_D.Jacksonville,
+			USA_D.Miami,
+			USA_D.Tampa,
+			USA_D.Tampa,
+			USA_D.Mobile,
+			USA_D.Norfolk,
+		],
+		[,, USA_D.Charlotte,
+			USA_D.Charlotte,
+			USA_D.Chattanooga,
+			USA_D.Atlanta,
+			USA_D.Atlanta,
+			USA_D.Atlanta,
+			USA_D.Richmond,
+			USA_D.Knoxville,
+			USA_D.Mobile,
+			USA_D.Knoxville,
+			USA_D.Mobile,
+		]],
+	[USA_R.NC]:[
+		[,, USA_D.Cincinnati,
+			USA_D.Chicago,
+			USA_D.Cincinnati,
+			USA_D.Cincinnati,
+			USA_D.Columbus,
+			USA_D.Chicago,
+			USA_D.Chicago,
+			USA_D["St Louis"],
+			USA_D["St Louis"],
+			USA_D["St Louis"],
+			USA_D.Chicago,
+		],
+		[,, USA_D.Cleveland,
+			USA_D.Cleveland,
+			USA_D.Cleveland,
+			USA_D.Cleveland,
+			USA_D.Detroit,
+			USA_D.Detroit,
+			USA_D.Indianapolis,
+			USA_D.Milwaukee,
+			USA_D.Milwaukee,
+			USA_D.Chicago,
+			USA_D.Milwaukee,
+		]],
+	[USA_R.SC]:[
+		[,, USA_D.Shreveport,
+			USA_D.Shreveport,
+			USA_D.Dallas,
+			USA_D["New Orleans"],
+			USA_D.Dallas,
+			USA_D["San Antonio"],
+			USA_D.Houston,
+			USA_D.Houston,
+			USA_D["Fort Worth"],
+			USA_D["Fort Worth"],
+			USA_D["Fort Worth"],
+		],
+		[,, USA_D.Memphis,
+			USA_D.Memphis,
+			USA_D.Memphis,
+			USA_D["Little Rock"],
+			USA_D["New Orleans"],
+			USA_D.Birmingham,
+			USA_D.Louisville,
+			USA_D.Nashville,
+			USA_D.Nashville,
+			USA_D.Louisville,
+			USA_D.Memphis,
+		]],
+	[USA_R.PL]:[
+		[,, USA_D["Oklahoma City"],
+			USA_D["St Paul"],
+			USA_D.Minneapolis,
+			USA_D["St Paul"],
+			USA_D.Minneapolis,
+			USA_D["Oklahoma City"],
+			USA_D["Des Moines"],
+			USA_D.Omaha,
+			USA_D.Omaha,
+			USA_D.Fargo,
+			USA_D.Fargo,
+		],
+		[,, USA_D["Kansas City"],
+			USA_D["Kansas City"],
+			USA_D.Denver,
+			USA_D.Denver,
+			USA_D.Denver,
+			USA_D["Kansas City"],
+			USA_D["Kansas City"],
+			USA_D["Kansas City"],
+			USA_D.Pueblo,
+			USA_D.Pueblo,
+			USA_D["Oklahoma City"],
+		]],
+	[USA_R.NW]:[
+		[,, USA_D.Spokane,
+			USA_D["Salt Lake City"],
+			USA_D["Salt Lake City"],
+			USA_D["Salt Lake City"],
+			USA_D["Portland OR"],
+			USA_D["Portland OR"],
+			USA_D["Portland OR"],
+			USA_D.Pocatello,
+			USA_D.Butte,
+			USA_D.Butte,
+			USA_D["Portland OR"],
+		],
+		[,, USA_D.Spokane,
+			USA_D.Spokane,
+			USA_D.Seattle,
+			USA_D.Seattle,
+			USA_D.Seattle,
+			USA_D.Seattle,
+			USA_D["Rapid City"],
+			USA_D.Casper,
+			USA_D.Billings,
+			USA_D.Billings,
+			USA_D.Spokane,
+		]],
+	[USA_R.SW]:[
+		[,, USA_D["Los Angeles"],
+			USA_D.Oakland,
+			USA_D.Oakland,
+			USA_D.Oakland,
+			USA_D["Los Angeles"],
+			USA_D["Los Angeles"],
+			USA_D["Los Angeles"],
+			USA_D["San Francisco"],
+			USA_D["San Francisco"],
+			USA_D["San Francisco"],
+			USA_D["San Francisco"],
+		],
+		[,, USA_D["San Diego"],
+			USA_D["San Diego"],
+			USA_D.Reno,
+			USA_D["San Diego"],
+			USA_D.Sacramento,
+			USA_D["Las Vegas"],
+			USA_D.Phoenix,
+			USA_D["El Paso"],
+			USA_D.Tucumcari,
+			USA_D.Phoenix,
+			USA_D.Phoenix,
+		]]
+};
+
+const USA_payout_csv = `Albany,0,100,35,210,110,20,30,235,180,95,75,100,80,70,50,60,170,185,120,55,220,145,170,185,75,110,125,85,280,135,305,85,125,150,90,125,135,105,150,15,60,310,155,130,25,275,55,235,30,300,185,170,255,50,270,235,195,315,310,315,160,265,100,120,135,185,35
+Atlanta,100,0,70,190,15,110,95,215,255,30,25,15,75,50,75,60,80,155,95,75,145,135,80,85,60,35,90,20,230,55,230,45,40,70,80,115,35,30,50,85,55,270,90,100,75,190,80,210,120,280,150,160,260,60,270,205,105,225,270,280,65,280,60,115,55,130,85
+Baltimore,35,70,0,210,80,40,40,230,180,55,40,65,80,60,45,50,145,180,115,60,210,145,145,150,70,80,120,55,275,110,290,70,95,115,80,120,105,75,115,20,25,305,145,130,10,270,35,235,55,305,180,170,285,15,300,230,170,285,305,295,125,265,90,120,100,185,50
+Billings,210,190,210,0,180,230,180,25,35,225,210,180,130,155,160,160,150,65,105,155,140,65,150,175,145,225,105,185,110,155,145,160,155,260,120,90,190,165,190,220,220,140,140,90,210,190,175,50,240,95,75,50,120,215,135,65,175,155,140,90,160,60,130,90,240,110,205
+Birmingham,110,15,80,180,0,120,90,200,140,50,40,15,65,50,75,60,65,135,80,75,130,130,65,70,50,45,75,25,235,40,210,40,25,80,75,105,30,20,35,100,70,255,75,90,90,175,80,205,135,265,135,145,230,75,240,190,95,210,255,270,45,240,50,105,60,115,75
+Boston,20,110,40,230,120,0,50,255,200,95,85,115,100,95,70,80,185,205,140,75,240,165,195,195,95,120,145,95,300,150,325,105,140,160,110,140,145,120,155,25,70,330,175,150,30,295,65,255,10,320,210,205,305,55,320,255,210,325,330,315,165,285,120,140,140,210,45
+Buffalo,30,95,40,180,90,50,0,205,150,95,80,80,50,45,20,30,140,155,90,25,190,115,140,155,45,120,95,75,250,105,275,55,95,155,60,90,120,75,130,40,65,280,125,100,40,245,25,205,60,270,155,140,255,55,270,205,165,270,280,265,140,235,70,90,140,165,45
+Butte,235,215,230,25,200,255,205,0,55,260,175,140,150,180,185,185,175,90,140,180,160,90,175,200,170,245,130,210,90,180,120,180,175,285,145,110,210,185,215,240,250,120,165,115,235,165,200,25,265,70,100,75,95,235,110,45,195,130,120,65,185,35,155,110,265,135,225
+Casper,180,255,180,35,140,200,150,55,0,190,175,140,100,125,135,130,115,35,65,125,95,75,115,140,115,185,70,145,120,115,150,120,120,220,100,80,155,125,155,190,190,150,105,50,180,140,145,75,215,130,45,30,125,185,140,75,140,165,150,125,125,90,100,80,150,80,175
+Charleston,95,30,55,225,50,95,95,260,190,0,25,45,100,70,95,85,115,185,130,100,190,165,115,115,80,25,120,40,265,85,260,70,75,60,110,140,60,60,75,75,45,305,120,135,80,225,80,240,110,310,185,190,295,40,310,235,135,260,305,315,95,280,90,140,45,160,50
+Charlotte,75,25,40,210,40,85,80,175,175,25,0,40,85,55,65,60,110,180,115,80,175,150,110,110,65,40,110,25,260,85,255,55,70,75,95,125,60,50,75,60,40,300,115,125,50,240,60,230,95,305,180,180,275,35,290,225,135,255,300,300,90,270,80,125,60,155,40
+Chattanooga,100,15,65,180,15,115,80,140,140,45,40,0,60,35,60,45,90,140,80,60,155,125,90,85,45,50,75,10,240,55,235,30,40,85,70,100,50,15,65,85,65,270,90,90,75,190,70,215,120,265,140,145,245,60,260,205,105,235,270,270,70,185,45,100,20,130,60
+Chicago,80,75,80,130,65,100,50,150,100,100,85,60,0,30,35,35,95,105,35,25,140,65,95,120,20,110,45,55,195,65,225,30,55,145,10,40,85,45,90,90,95,225,80,50,80,195,45,150,115,220,105,90,200,85,320,150,120,220,225,215,85,185,30,40,125,110,75
+Cincinnati,70,50,60,155,50,95,45,180,125,70,55,35,30,0,25,10,95,125,65,25,155,90,95,125,10,85,60,30,225,65,235,10,50,120,35,70,75,30,85,75,70,255,90,75,65,210,30,180,105,245,125,120,230,60,245,180,125,235,255,240,85,210,35,70,100,125,55
+Cleveland,50,75,45,160,75,70,20,185,135,95,65,60,35,25,0,15,125,135,70,15,175,100,125,135,30,110,80,55,230,90,255,35,70,145,40,75,100,55,110,55,65,260,105,85,50,225,15,190,80,255,135,125,235,55,250,185,145,250,260,250,110,215,50,75,125,145,45
+Columbus,60,60,50,160,60,80,30,185,130,85,60,45,35,10,15,0,110,130,70,20,170,95,110,130,15,95,65,40,225,65,240,25,60,130,40,75,80,40,95,65,70,265,100,80,55,215,20,185,95,255,130,135,235,55,250,180,135,240,265,250,115,215,40,75,115,140,50
+Dallas,170,80,145,150,65,185,140,175,115,115,110,90,95,95,125,110,0,85,75,120,65,125,50,25,95,110,50,90,160,35,145,85,90,145,105,100,60,70,50,160,140,195,25,70,155,110,130,150,195,225,75,125,190,140,195,135,25,145,195,240,20,210,70,100,125,50,140
+Denver,185,155,180,65,135,205,155,90,35,185,180,140,105,125,135,130,85,0,70,130,75,115,85,110,115,180,65,145,100,110,135,120,110,220,105,90,150,125,135,195,190,135,75,55,185,105,150,60,215,135,10,55,115,185,130,55,110,145,135,155,100,125,90,90,200,45,180
+Des Moines,120,95,115,105,80,140,90,140,65,130,115,80,35,65,70,70,75,70,0,65,115,50,75,100,55,130,20,90,160,70,195,60,65,165,35,25,100,65,105,125,130,190,55,15,115,170,85,120,150,190,70,70,170,120,180,115,100,205,190,195,80,165,35,25,145,90,110
+Detroit,55,75,60,155,75,75,25,180,125,100,80,60,25,25,15,20,120,130,65,0,165,90,120,135,30,110,70,50,225,90,250,35,75,145,35,65,100,55,110,65,80,255,105,75,65,220,30,180,85,250,130,130,230,70,245,180,140,245,255,240,105,210,50,65,125,140,60
+El Paso,220,145,210,140,130,240,190,160,95,190,175,155,140,155,175,170,65,75,115,165,0,165,65,85,150,175,95,155,130,100,80,150,115,215,145,140,130,135,115,230,210,130,70,115,220,45,185,135,255,200,60,130,105,205,120,125,60,80,130,220,85,200,120,140,195,35,295
+Fargo,145,135,145,65,130,165,115,90,75,165,150,125,65,90,100,95,125,115,50,90,165,0,125,150,80,170,70,120,175,120,210,95,110,210,55,25,145,110,150,155,160,205,105,60,145,220,110,135,175,160,125,45,150,150,200,130,150,220,205,150,130,120,80,25,190,140,140
+Fort Worth,170,80,145,150,65,195,140,175,115,115,110,90,95,95,125,110,50,85,75,120,65,125,0,25,95,110,50,90,160,40,145,85,90,145,105,100,60,70,50,165,140,195,25,70,155,110,130,150,205,225,75,125,190,140,195,135,25,145,195,240,20,210,70,100,125,50,140
+Houston,185,85,150,175,70,195,155,200,140,115,110,85,120,125,135,130,25,110,100,135,85,150,25,0,110,95,80,95,170,45,165,100,60,135,110,120,50,85,35,170,145,210,50,90,160,130,145,170,205,250,100,150,220,145,210,160,20,160,210,260,25,230,90,120,115,80,150
+Indianapolis,75,60,70,145,50,95,45,170,115,80,65,45,20,10,30,15,95,115,55,30,150,80,95,110,0,95,50,40,215,50,225,10,50,130,25,60,80,30,85,80,80,245,75,65,70,200,35,170,105,245,115,110,220,70,235,170,115,225,245,230,90,200,25,60,110,115,65
+Jacksonville,110,35,80,225,45,120,120,245,185,25,40,50,110,85,110,95,110,180,130,110,175,170,110,95,95,0,115,55,260,80,260,80,70,30,115,150,40,65,60,100,60,300,120,135,90,220,105,235,130,315,180,190,275,65,290,235,120,255,300,315,90,280,90,150,20,160,60
+Kansas City,125,90,120,105,75,145,95,130,70,120,110,75,45,60,80,65,50,65,20,70,95,70,50,80,50,115,0,80,165,50,175,55,50,155,55,50,85,60,85,135,130,195,35,20,120,150,90,125,160,195,60,75,175,120,190,120,80,175,195,195,55,165,30,50,135,65,115
+Knoxville,85,20,55,185,25,95,75,210,145,40,25,10,55,30,55,40,90,145,90,50,155,120,90,95,40,55,80,0,245,55,235,30,40,90,65,95,55,20,60,75,55,270,90,95,65,215,60,205,105,275,145,150,250,50,265,200,115,235,270,270,80,240,55,95,70,130,50
+Las Vegas,280,230,275,110,235,300,250,90,120,265,260,240,195,225,230,225,160,100,160,225,130,175,160,170,215,260,165,245,0,190,30,215,210,300,195,180,215,220,200,280,290,65,155,150,280,75,245,60,260,135,110,140,80,280,65,45,145,45,65,150,170,170,190,180,285,95,275
+Little Rock,135,55,110,155,40,150,105,180,115,85,85,55,65,65,90,65,35,110,70,90,100,120,40,45,50,80,50,55,190,0,185,50,15,115,75,95,50,35,45,130,110,215,35,70,120,160,95,160,180,245,100,125,215,105,215,160,60,180,215,265,20,230,35,95,95,75,105
+Los Angeles,305,230,290,145,210,325,275,120,150,260,255,235,225,235,255,240,145,135,195,250,80,210,145,165,225,260,175,235,30,185,0,230,195,295,225,215,210,220,195,310,295,45,150,180,300,45,265,90,335,120,135,175,60,285,50,80,145,15,45,135,165,155,205,215,275,115,290
+Louisville,85,45,70,160,40,105,55,180,120,70,55,30,30,10,35,25,85,120,60,35,150,95,85,100,10,80,55,30,215,50,230,0,40,120,40,70,55,20,75,85,80,245,85,70,80,225,45,175,115,245,120,125,225,70,240,170,115,225,245,250,80,220,25,70,100,120,65
+Memphis,125,40,95,155,25,140,95,175,120,75,70,40,55,50,70,60,90,110,65,75,115,110,90,60,50,70,50,40,210,15,195,40,0,105,60,90,35,25,40,115,95,230,50,65,105,175,80,170,150,250,110,125,205,90,220,165,75,190,230,245,40,215,30,90,85,85,95
+Miami,150,70,115,260,80,160,155,285,220,60,75,85,145,120,145,130,145,220,165,145,215,210,145,135,130,30,155,90,300,115,295,120,105,0,155,185,85,100,100,135,95,335,155,170,125,260,140,275,170,350,215,225,330,100,335,270,155,290,335,350,125,320,130,185,20,195,110
+Milwaukee,90,80,80,120,75,110,60,145,100,110,95,70,10,35,40,40,105,105,35,35,145,55,105,110,25,115,55,65,195,75,225,40,60,155,0,35,90,55,100,100,105,225,85,50,90,195,55,155,120,215,115,90,205,95,220,150,130,230,225,210,85,180,35,35,135,110,65
+Minneapolis,125,115,120,90,105,140,90,110,80,140,125,100,40,70,75,75,100,90,25,65,140,25,100,120,60,150,50,95,180,95,215,70,90,185,35,0,125,85,125,130,135,210,80,35,120,195,85,135,155,180,95,50,190,125,205,135,125,225,210,175,60,145,55,0,165,115,115
+Mobile,135,35,105,190,30,145,120,210,155,60,60,50,85,75,100,80,60,150,100,100,130,145,60,50,80,40,85,55,215,50,210,55,35,85,90,125,0,50,15,120,95,260,80,105,110,175,105,225,145,285,140,160,250,95,260,195,70,210,260,280,45,250,65,125,65,115,100
+Nashville,105,30,75,165,20,120,75,185,125,60,50,15,45,30,55,40,70,125,65,55,135,110,70,85,30,65,60,20,220,35,220,20,25,100,55,85,50,0,55,95,80,255,75,75,85,195,60,190,130,250,125,130,230,70,245,190,100,215,255,255,65,225,30,85,80,110,70
+New Orleans,150,50,115,190,35,155,130,215,155,75,75,65,90,85,110,95,50,135,105,110,115,150,50,35,85,60,85,60,200,45,195,75,40,100,100,125,15,55,0,135,100,245,75,105,125,160,115,185,165,275,135,155,220,105,235,185,55,195,245,290,30,260,70,125,80,100,110
+New York,15,85,20,220,100,25,40,240,190,75,60,85,90,75,55,65,160,195,125,65,230,155,165,170,80,100,135,75,280,130,310,85,115,135,100,130,120,95,135,0,45,315,160,140,10,280,45,245,35,310,195,180,295,35,310,240,190,305,315,305,155,275,105,130,120,200,20
+Norfolk,60,55,25,220,70,70,65,250,190,45,40,65,95,70,65,70,140,190,130,80,210,160,140,145,80,60,130,55,290,110,295,80,95,95,105,135,95,80,100,45,0,320,150,140,35,265,50,245,80,320,190,195,285,10,310,245,160,280,320,310,120,280,100,135,60,185,25
+Oakland,310,270,305,140,255,330,280,120,150,305,300,270,225,255,260,265,195,135,190,255,130,205,195,210,245,300,195,270,65,215,45,245,230,335,225,210,260,255,245,315,320,0,180,175,310,90,275,90,340,70,140,175,25,310,10,80,190,60,0,90,215,110,220,210,315,145,305
+Oklahoma City,155,90,145,140,75,175,125,165,105,120,115,90,80,90,105,100,25,75,55,105,70,105,25,50,75,120,35,90,155,35,150,85,50,155,85,80,80,75,75,160,150,180,0,55,150,125,115,125,185,215,70,90,160,140,175,125,50,145,180,230,105,200,55,80,135,40,140
+Omaha,130,100,130,90,90,150,100,115,50,135,125,90,50,75,85,80,70,55,15,75,115,60,70,90,65,135,20,95,150,70,180,70,65,170,50,35,105,75,105,140,140,175,55,0,130,160,95,105,160,175,55,55,155,135,170,105,100,190,175,180,75,150,40,35,150,85,125
+Philadelphia,25,75,10,210,90,30,40,235,180,80,50,75,80,65,50,55,155,185,115,65,220,145,155,160,70,90,120,65,280,120,300,80,105,125,90,120,110,85,125,10,35,310,150,130,0,270,35,235,45,300,185,170,285,25,300,235,180,295,310,295,135,265,95,120,110,190,15
+Phoenix,275,190,270,190,175,295,245,165,140,225,240,190,195,210,225,215,110,105,170,220,45,220,110,130,200,220,150,215,75,160,45,225,175,260,195,195,175,195,160,280,265,90,125,160,270,0,235,140,305,160,95,160,105,265,90,120,105,40,90,180,130,200,180,195,240,85,265
+Pittsburgh,55,80,35,175,80,65,25,200,145,80,60,70,45,30,15,20,130,150,85,30,185,110,130,145,35,105,90,60,245,95,265,45,80,140,55,85,105,60,115,45,50,275,115,95,35,235,0,200,80,265,150,135,250,40,265,200,155,260,275,260,120,230,60,85,125,155,30
+Pocatello,235,210,235,50,205,255,205,25,75,240,230,215,150,180,190,185,150,60,120,180,135,135,150,170,170,235,125,205,60,160,90,175,170,275,155,135,225,190,185,245,245,90,125,105,235,140,200,0,270,70,75,100,70,240,85,15,175,110,90,90,155,60,145,135,255,110,230
+Portland ME,30,120,55,240,135,10,60,265,215,110,95,120,115,105,80,95,195,215,150,85,255,175,205,205,105,130,160,105,260,180,335,115,150,170,120,155,145,130,165,35,80,340,185,160,45,305,80,270,0,335,220,215,315,70,335,265,225,335,340,325,160,295,130,155,150,220,55
+Portland OR,300,280,305,95,265,320,270,70,130,310,305,265,220,245,255,255,225,135,190,250,200,160,225,250,245,315,195,275,135,245,120,245,250,350,215,180,285,250,275,310,320,70,215,175,300,160,265,70,335,0,145,145,75,310,65,90,250,130,70,20,240,35,220,180,330,185,300
+Pueblo,185,150,180,75,135,210,155,100,45,185,180,140,105,125,135,130,75,10,70,130,60,125,75,100,115,180,60,145,110,100,135,120,110,215,115,95,140,125,135,195,190,140,70,55,185,95,150,75,220,145,0,65,120,185,135,65,95,135,140,160,100,130,90,95,200,35,180
+Rapid City,170,160,170,50,145,205,140,75,30,190,180,145,90,120,125,135,125,55,70,130,130,45,125,150,110,190,75,150,140,125,175,125,125,225,90,50,160,130,155,180,195,175,90,55,170,160,135,100,215,145,65,0,155,190,170,95,150,185,175,140,130,110,95,50,205,110,180
+Reno,255,260,285,120,230,305,255,95,125,295,275,245,200,230,235,235,190,115,170,230,105,150,190,220,220,275,175,250,80,215,60,225,205,330,205,190,250,230,220,295,285,25,160,155,285,105,250,70,315,75,120,155,0,280,15,55,200,85,25,95,210,110,205,190,310,155,280
+Richmond,50,60,15,215,75,55,55,235,185,40,35,60,85,60,55,55,140,185,120,70,205,150,140,145,70,65,120,50,280,105,285,70,90,100,95,125,95,70,105,35,10,310,140,135,25,265,40,240,70,310,185,190,280,0,305,235,165,285,310,300,120,270,90,125,85,180,10
+Sacramento,270,270,300,135,240,320,270,110,140,310,290,260,320,245,250,250,195,130,180,245,120,200,195,210,235,290,190,265,65,215,50,240,220,335,220,205,260,245,235,310,310,10,175,170,300,90,265,85,335,65,135,170,15,305,0,70,190,65,10,85,215,100,210,205,315,145,295
+Salt Lake City,235,205,230,65,190,255,205,45,75,235,225,205,150,180,185,180,135,55,115,180,125,130,135,160,170,235,120,200,45,160,80,170,165,270,150,135,195,190,185,240,245,80,125,105,235,120,200,15,265,90,65,95,55,235,70,0,160,90,80,105,150,80,145,135,250,95,230
+San Antonio,195,105,170,175,95,210,165,195,140,135,135,105,120,125,145,135,25,110,100,140,60,150,25,20,115,120,80,115,145,60,145,115,75,155,130,125,70,100,55,190,160,190,50,100,180,105,155,175,225,250,95,150,200,165,190,160,0,170,190,265,50,235,90,125,135,70,170
+San Diego,315,225,285,155,210,325,270,130,165,260,255,235,220,235,250,240,145,145,205,245,80,220,145,160,225,255,175,235,45,180,15,225,190,290,230,225,210,215,195,305,280,60,145,190,295,40,260,110,335,130,135,185,85,285,65,90,170,0,60,150,165,170,200,225,270,110,285
+San Francisco,310,270,305,140,255,330,280,120,150,305,300,270,225,255,260,265,195,135,190,255,130,205,195,210,245,300,195,270,65,215,45,245,230,335,225,210,260,255,245,315,320,0,180,175,310,90,275,90,340,70,140,175,25,310,10,80,190,60,0,90,215,110,220,210,315,145,305
+Seattle,315,280,295,90,270,315,265,65,125,315,300,270,215,240,250,250,240,155,195,240,220,150,240,260,230,315,195,270,150,265,135,250,245,350,210,175,280,255,290,305,310,90,230,180,295,180,260,90,325,20,160,140,95,300,85,105,265,150,90,0,260,30,220,175,330,205,290
+Shreveport,160,65,125,160,45,165,140,185,125,95,90,70,85,85,110,115,20,100,80,105,85,130,20,25,90,90,55,80,170,20,165,80,40,125,85,60,45,65,30,155,120,215,105,75,135,130,120,155,160,240,100,130,210,120,215,150,50,165,215,260,0,225,85,105,110,65,120
+Spokane,265,280,265,60,240,285,235,35,90,280,270,185,185,210,215,215,210,125,165,210,200,120,210,230,200,280,165,240,170,230,155,220,215,320,180,145,250,225,260,275,280,110,200,150,265,200,230,60,295,35,130,110,110,270,100,80,235,170,110,30,225,0,190,145,300,175,260
+St Louis,100,60,90,130,50,120,70,155,100,90,80,45,30,35,50,40,70,90,35,50,120,80,70,90,25,90,30,55,190,35,205,25,30,130,35,55,65,30,70,105,100,220,55,40,95,180,60,145,130,220,90,95,205,90,210,145,90,200,220,220,85,190,0,55,110,95,90
+St Paul,120,115,120,90,105,140,90,110,80,140,125,100,40,70,75,75,100,90,25,65,140,25,100,120,60,150,50,95,180,95,215,70,90,185,35,0,125,85,125,130,135,210,80,35,120,195,85,135,155,180,95,50,190,125,205,135,125,225,210,175,105,145,55,0,165,110,115
+Tampa,135,55,100,240,60,140,140,265,150,45,60,20,125,100,125,115,125,200,145,125,195,190,125,115,110,20,135,70,285,95,275,100,85,20,135,165,65,80,80,120,60,315,135,150,110,240,125,255,150,330,200,205,310,85,315,250,135,270,315,330,110,300,110,165,0,175,95
+Tucumcari,185,130,185,110,115,210,165,135,80,160,155,130,110,125,145,140,50,45,90,140,35,140,50,80,115,160,65,130,95,75,115,120,85,195,110,115,115,110,100,200,185,145,40,85,190,85,155,110,220,185,35,110,155,180,145,95,70,110,145,205,65,175,95,110,175,0,180
+Washington DC,35,85,50,205,75,45,45,225,175,50,40,60,75,55,45,50,140,180,110,60,295,140,140,150,65,60,115,50,275,105,290,65,95,110,65,115,100,70,110,20,25,305,140,125,15,265,30,230,55,300,180,180,280,10,295,230,170,285,305,290,120,260,90,115,95,180,0`;
+
+const USA_payouts = generatePayoutLookup(USA_payout_csv, USA_D);
+
+
+
+/********************
+*   Australia Data  *
+*********************/
 
 const AUS_R = Object.freeze({'WA':0, 'NS':1, 'QL':2, 'VI':3, 'TA':4, 'NT':5, 'SA':6})
 const AUS_regionNames = ["Western Australia", "New South Wales", "Queensland", "Victoria", "Tasmania", "Northern Territory", "South Australia"];
@@ -840,24 +715,6 @@ const AUS_lookup_dest = {
 			AUS_D.Adelaide,
 		]]
 };
-
-function generatePayoutLookup(csv, destinations){
-	let payoutTable  = {};
-	let lines = csv.split('\n');
-	for (const line of lines) {
-		let cells = line.split(',');
-		let cityName = cells.shift();
-		let tmp = {};
-		for (let i = 0; i < cells.length; i++) {
-			let n = parseInt(cells[i], 10);
-			if (!isNaN(n)) {
-				tmp[i] = n;
-			}
-		}
-		payoutTable[destinations[cityName]] = tmp;
-	}
-	return payoutTable;
-}
 
 const AUS_payout_csv = `Adelaide,0,245,160,195,90,420,130,125,235,60,305,235,360,165,130,280,360,115,335,140,160,195,160,30,115,235,255,195,60,95,15,335,315,325,160,21,115,60,220,140,185,125,125,165,120,210,45,265,95,92,23,125,165,90,175,245,305,420,165,70,325,175
 Albany,,0,335,270,335,570,330,300,410,235,245,35,510,340,200,185,405,130,270,385,335,55,140,160,360,95,200,440,305,270,95,375,455,315,405,130,360,305,105,385,360,300,220,370,290,45,200,200,220,335,405,335,410,300,350,325,455,560,340,175,305,420
