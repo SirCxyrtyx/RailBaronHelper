@@ -7,9 +7,11 @@ const getByID = id => document.getElementById(id),
 	mapNames = ["United States", "Australia"],
 	SVGNS = "http://www.w3.org/2000/svg",
 	fontpt = 30,
-	root = getByID("root");
+	root = getByID("root"),
+	noDest = "?";
 
 let btns = [],
+	playerLocations = [],
 	playerDests = [],
 	numPlayers,
 	currentPlayer,
@@ -43,25 +45,27 @@ function setPlayers(n) {
 	numPlayers = n;
 	btnsClear();
 	for (let i = 0; i < numPlayers; i++) {
-		updatePlayerName(i);
-		let fullDest = destination();
-		playerDests[i] = fullDest.city;
-		updateDestination(i, fullDest.region);
-		updatePayout(i, 0);
+		displayPlayerName(i);
+		playerLocations[i] = destination();
+		playerDests[i] = undefined;
+		displayDestination(i);
+		displayPayout(i, 0);
 	};
 }
 
 function newDestination(playerIdx, oldRegion, region) {
-	let oldDest = playerDests[playerIdx],
-		fullDest;
 	currentPlayer = playerIdx;
-	fullDest = destination(oldRegion, region);
-	if(fullDest === false)
+	let dest = destination(oldRegion, region);
+	if(dest === false)
 		return;
-	playerDests[playerIdx] = fullDest.city;
-	console.log(fullDest);
-	updateDestination(playerIdx, fullDest.region);
-	updatePayout(playerIdx, payout(oldDest, playerDests[playerIdx]) * 100);
+	console.log(dest);
+	if (playerDests[playerIdx] === undefined) {
+		playerDests[playerIdx] = dest;
+		displayDestination(playerIdx);
+	} else {
+		updateDestination(playerIdx, dest);
+	}
+	displayPayout(playerIdx);
 }
 
 function btnsClear() {
@@ -77,20 +81,62 @@ function selectRegion(evt) {
 	newDestination(currentPlayer, false, region);
 }
 
-function updatePlayerName(i, name) {
+function updateDestination(i, dest) {
+	playerLocations[i] = playerDests[i];
+	playerDests[i] = dest;
+
+	displayDestination(i);
+}
+
+function displayPlayerName(i, name) {
 	name = name || `${i + 1}`;
-	btns[i]?.remove();
-	btns[i] = button(100, 80 + i * 100, "#E01B1B", name, undefined, undefined, () => updatePlayerName(i, prompt("Enter player initials")));
+	if (btns[i]) {
+		btns[i].remove();
+	}
+	btns[i] = button(100, 80 + i * 100, "#E01B1B", name, undefined, undefined, () => displayPlayerName(i, prompt("Enter player initials")));
 }
 
-function updateDestination(i, region) {
-	btns[i + numPlayers]?.remove();
-	btns[i + numPlayers] = button(200, 80 + i * 100, "#111111", playerDests[i], undefined, undefined, () => newDestination(i, region));
+function displayDestination(i) {
+	if (btns[i + numPlayers]) {
+		btns[i + numPlayers].remove();
+	}
+	if (btns[i + numPlayers * 2]) {
+		btns[i + numPlayers * 2].remove();
+	}
+	if (btns[i + numPlayers * 3]) {
+		btns[i + numPlayers * 3].remove();
+	}
+	btns[i + numPlayers] = button(200, 80 + i * 100, "#111111", playerLocations[i], undefined, undefined, () => editCity(i, playerLocations));
+	btns[i + numPlayers * 2] = button(440, 80 + i * 100, "#1b1be0", "⇨", undefined, undefined, () => newDestination(i, regionFromCity(playerDests[i] || playerLocations[i])));
+	btns[i + numPlayers * 3] = button(540, 80 + i * 100, "#111111", playerDests[i] || noDest, undefined, undefined, () => editCity(i, playerDests));
 }
 
-function updatePayout(i, payout){
-	btns[i + numPlayers * 2]?.remove();
-	btns[i + numPlayers * 2] = button(440, 80 + i * 100, "#00BA19", "$" + payout);
+function displayPayout(i){
+	if (btns[i + numPlayers * 4]) {
+		btns[i + numPlayers * 4].remove();
+	}
+	btns[i + numPlayers * 4] = button(780, 80 + i * 100, "#00BA19", `$${payout(i) * 100}`);
+}
+
+function editCity(i, arr) {
+	let city = prompt("Enter name of city");
+	if (city === null) {
+		return;
+	}
+	let cities;
+	if (map === MAPS.AUS) {
+		cities = AUS_D;
+	} else {
+		cities = USA_D;
+	}
+	if (cities[city] === undefined) {
+		alert(`${city} is not the name of a city! Enter the name exactly as it appears on the board.`);
+		return;
+	}
+	
+	arr[i] = city;
+	displayDestination(i)
+	displayPayout(i);
 }
 
 /*****************
@@ -161,7 +207,7 @@ function button(x, y, color, text, width, height, onClick) {
 }
 
 
-function payout(city1, city2) {
+function payout(i) {
 	var destIndices, payouts;
 	if (map === MAPS.AUS) {
 		destIndices = AUS_D;
@@ -172,14 +218,15 @@ function payout(city1, city2) {
 		payouts = USA_payouts;
 	}
 	
-	let c1 = destIndices[city1],
-		c2 = destIndices[city2];
-	if(payouts[c1] !== undefined && payouts[c1][c2] !== undefined) {
-		return payouts[c1][c2];
-	} else {
-		return payouts[c2][c1];
+	let city1 = destIndices[playerLocations[i]],
+		city2 = destIndices[playerDests[i]];
+	if(payouts[city1] !== undefined && payouts[city1][city2] !== undefined) {
+		return payouts[city1][city2];
+	} 
+	else if (payouts[city2] !== undefined && payouts[city2][city1] !== undefined){
+		return payouts[city2][city1];
 	}
-	
+	return 0;
 }
 
 function destination(previous, region) {
@@ -204,10 +251,7 @@ function destination(previous, region) {
 		return false;
 	}
 
-	return {
-		"city": cityNames[destLookup[region][isEven()][roll(2)]],
-		"region": region
-	}
+	return cityNames[destLookup[region][isEven()][roll(2)]];
 }
 
 function regionFromCode(regionCode){
@@ -215,6 +259,13 @@ function regionFromCode(regionCode){
 		return AUS_R[regionCode];
 	}
 	return USA_R[regionCode];
+}
+
+function regionFromCity(city) {
+	if (map === MAPS.AUS) {
+		return AUS_cityRegion[AUS_D[city]];
+	}
+	return USA_cityRegion[USA_D[city]];
 }
 
 function generatePayoutLookup(csv, destinations){
@@ -246,6 +297,76 @@ const USA_regionNames = ["North East", "South East", "North Central", "South Cen
 
 const USA_D = Object.freeze({"Albany":0,"Atlanta":1,"Baltimore":2,"Billings":3,"Birmingham":4,"Boston":5,"Buffalo":6,"Butte":7,"Casper":8,"Charleston":9,"Charlotte":10,"Chattanooga":11,"Chicago":12,"Cincinnati":13,"Cleveland":14,"Columbus":15,"Dallas":16,"Denver":17,"Des Moines":18,"Detroit":19,"El Paso":20,"Fargo":21,"Fort Worth":22,"Houston":23,"Indianapolis":24,"Jacksonville":25,"Kansas City":26,"Knoxville":27,"Las Vegas":28,"Little Rock":29,"Los Angeles":30,"Louisville":31,"Memphis":32,"Miami":33,"Milwaukee":34,"Minneapolis":35,"Mobile":36,"Nashville":37,"New Orleans":38,"New York":39,"Norfolk":40,"Oakland":41,"Oklahoma City":42,"Omaha":43,"Philadelphia":44,"Phoenix":45,"Pittsburgh":46,"Pocatello":47,"Portland ME":48,"Portland OR":49,"Pueblo":50,"Rapid City":51,"Reno":52,"Richmond":53,"Sacramento":54,"Salt Lake City":55,"San Antonio":56,"San Diego":57,"San Francisco":58,"Seattle":59,"Shreveport":60,"Spokane":61,"St Louis":62,"St Paul":63,"Tampa":64,"Tucumcari":65,"Washington DC":66});
 const USA_cityNames = Object.keys(USA_D);
+
+const USA_cityRegion = {
+	[USA_D.Albany]: USA_R.NE,
+	[USA_D.Atlanta]: USA_R.SE,
+	[USA_D.Baltimore]: USA_R.NE,
+	[USA_D.Billings]: USA_R.NW,
+	[USA_D.Birmingham]: USA_R.SC,
+	[USA_D.Boston]: USA_R.NE,
+	[USA_D.Buffalo]: USA_R.NE,
+	[USA_D.Butte]: USA_R.NW,
+	[USA_D.Casper]: USA_R.NW,
+	[USA_D.Charleston]: USA_R.SE,
+	[USA_D.Charlotte]: USA_R.SE,
+	[USA_D.Chattanooga]: USA_R.SE,
+	[USA_D.Chicago]: USA_R.NC,
+	[USA_D.Cincinnati]: USA_R.NC,
+	[USA_D.Cleveland]: USA_R.NC,
+	[USA_D.Columbus]: USA_R.NC,
+	[USA_D.Dallas]: USA_R.SC,
+	[USA_D.Denver]: USA_R.PL,
+	[USA_D["Des Moines"]]: USA_R.PL,
+	[USA_D.Detroit]: USA_R.NC,
+	[USA_D["El Paso"]]: USA_R.SW,
+	[USA_D.Fargo]: USA_R.PL,
+	[USA_D["Fort Worth"]]: USA_R.SC,
+	[USA_D.Houston]: USA_R.SC,
+	[USA_D.Indianapolis]: USA_R.NC,
+	[USA_D.Jacksonville]: USA_R.SE,
+	[USA_D["Kansas City"]]: USA_R.PL,
+	[USA_D.Knoxville]: USA_R.SE,
+	[USA_D["Las Vegas"]]: USA_R.SW,
+	[USA_D["Little Rock"]]: USA_R.SC,
+	[USA_D["Los Angeles"]]: USA_R.SW,
+	[USA_D.Louisville]: USA_R.SC,
+	[USA_D.Memphis]: USA_R.SC,
+	[USA_D.Miami]: USA_R.SE,
+	[USA_D.Milwaukee]: USA_R.NC,
+	[USA_D.Minneapolis]: USA_R.PL,
+	[USA_D.Mobile]: USA_R.SE,
+	[USA_D.Nashville]: USA_R.SC,
+	[USA_D["New Orleans"]]: USA_R.SC,
+	[USA_D["New York"]]: USA_R.NE,
+	[USA_D.Norfolk]: USA_R.SE,
+	[USA_D.Oakland]: USA_R.SW,
+	[USA_D["Oklahoma City"]]: USA_R.PL,
+	[USA_D.Omaha]: USA_R.PL,
+	[USA_D.Philadelphia]: USA_R.NE,
+	[USA_D.Phoenix]: USA_R.SW,
+	[USA_D.Pittsburgh]: USA_R.NE,
+	[USA_D.Pocatello]: USA_R.NW,
+	[USA_D["Portland ME"]]: USA_R.NE,
+	[USA_D["Portland OR"]]: USA_R.NW,
+	[USA_D.Pueblo]: USA_R.PL,
+	[USA_D["Rapid City"]]: USA_R.NW,
+	[USA_D.Reno]: USA_R.SW,
+	[USA_D.Richmond]: USA_R.SE,
+	[USA_D.Sacramento]: USA_R.SW,
+	[USA_D["Salt Lake City"]]: USA_R.NW,
+	[USA_D["San Antonio"]]: USA_R.SC,
+	[USA_D["San Diego"]]: USA_R.SW,
+	[USA_D["San Francisco"]]: USA_R.SW,
+	[USA_D.Seattle]: USA_R.NW,
+	[USA_D.Shreveport]: USA_R.SC,
+	[USA_D.Spokane]: USA_R.NW,
+	[USA_D["St Louis"]]: USA_R.NC,
+	[USA_D["St Paul"]]: USA_R.PL,
+	[USA_D.Tampa]: USA_R.SE,
+	[USA_D.Tucumcari]: USA_R.SW,
+	[USA_D.Washington]: USA_R.NE,
+};
 
 //lookups are [even, odd]
 const USA_lookup_region = [
@@ -528,8 +649,73 @@ const USA_payouts = generatePayoutLookup(USA_payout_csv, USA_D);
 const AUS_R = Object.freeze({'WA':0, 'NS':1, 'QL':2, 'VI':3, 'TA':4, 'NT':5, 'SA':6})
 const AUS_regionNames = ["Western Australia", "New South Wales", "Queensland", "Victoria", "Tasmania", "Northern Territory", "South Australia"];
 
-const AUS_D = Object.freeze({"Adelaide":0,"Albany":1,"Albury":2,"Alice Springs":3,"Ballarat":4,"Bamaga":5,"Benalla":6,"Bourke":7,"Brisbane":8,"Broken Hill":9,"Broome":10,"Bunbury":11,"Cairns":12,"Canberra":13,"Ceduna":14,"Dampier":15,"Darwin":16,"Deakin":17,"Derby":18,"Devonport":19,"Dubbo":20,"Esperance":21,"Eucla":22,"Exmouth":23,"Geelong":24,"Geraldton":25,"Giles Met Station":26,"Hobart":27,"Horsham":28,"Ivanhoe":29,"Kalgoorlie":30,"Katherine":31,"Kowanyama":32,"Kununurra":33,"Launceston":34,"Meekatharra":35,"Melbourne":36,"Mildura":37,"Millewa":38,"Moe":39,"Newcastle":40,"Nockatunga":41,"Oodnadatta":42,"Orbost":43,"Parkes":44,"Perth":45,"Port Agusta":46,"Port Hedland":47,"Port Lincoln":48,"Portland":49,"Rockhampton":50,"Shepparton":51,"Smithton":52,"Swan Hill":53,"Sydney":54,"Tennant Creek":55,"Townsville":56,"Weipa":57,"Wodonga":58,"Woomera":59,"Wyndham":60,"Zeehan":61});
+const AUS_D = Object.freeze({"Adelaide":0,"Albany":1,"Albury":2,"Alice Springs":3,"Ballarat":4,"Bamaga":5,"Benalla":6,"Bourke":7,"Brisbane":8,"Broken Hill":9,"Broome":10,"Bunbury":11,"Cairns":12,"Canberra":13,"Ceduna":14,"Dampier":15,"Darwin":16,"Deakin":17,"Derby":18,"Devonport":19,"Dubbo":20,"Esperance":21,"Eucla":22,"Exmouth":23,"Geelong":24,"Geraldton":25,"Giles Met Stn.":26,"Hobart":27,"Horsham":28,"Ivanhoe":29,"Kalgoorlie":30,"Katherine":31,"Kowanyama":32,"Kununurra":33,"Launceston":34,"Meekatharra":35,"Melbourne":36,"Mildura":37,"Millewa":38,"Moe":39,"Newcastle":40,"Nockatunga":41,"Oodnadatta":42,"Orbost":43,"Parkes":44,"Perth":45,"Port Agusta":46,"Port Hedland":47,"Port Lincoln":48,"Portland":49,"Rockhampton":50,"Shepparton":51,"Smithton":52,"Swan Hill":53,"Sydney":54,"Tennant Creek":55,"Townsville":56,"Weipa":57,"Wodonga":58,"Woomera":59,"Wyndham":60,"Zeehan":61});
 const AUS_cityNames = Object.keys(AUS_D);
+
+const AUS_cityRegion = {
+	[AUS_D.Adelaide]: AUS_R.SA,
+	[AUS_D.Albany]: AUS_R.WA,
+	[AUS_D.Albury]: AUS_R.NS,
+	[AUS_D['Alice Springs']]: AUS_R.NT,
+	[AUS_D.Ballarat]: AUS_R.VI,
+	[AUS_D.Bamaga]: AUS_R.QL,
+	[AUS_D.Benalla]: AUS_R.VI,
+	[AUS_D.Bourke]: AUS_R.NS,
+	[AUS_D.Brisbane]: AUS_R.QL,
+	[AUS_D['Broken Hill']]: AUS_R.NS,
+	[AUS_D.Broome]: AUS_R.WA,
+	[AUS_D.Bunbury]: AUS_R.WA,
+	[AUS_D.Cairns]: AUS_R.QL,
+	[AUS_D.Canberra]: AUS_R.NS,
+	[AUS_D.Ceduna]: AUS_R.SA,
+	[AUS_D.Dampier]: AUS_R.WA,
+	[AUS_D.Darwin]: AUS_R.NT,
+	[AUS_D.Deakin]: AUS_R.WA,
+	[AUS_D.Derby]: AUS_R.WA,
+	[AUS_D.Devonport]: AUS_R.TA,
+	[AUS_D.Dubbo]: AUS_R.NS,
+	[AUS_D.Esperance]: AUS_R.WA,
+	[AUS_D.Eucla]: AUS_R.WA,
+	[AUS_D.Exmouth]: AUS_R.WA,
+	[AUS_D.Geelong]: AUS_R.VI,
+	[AUS_D.Geraldton]: AUS_R.WA,
+	[AUS_D['Giles Met Stn.']]: AUS_R.WA,
+	[AUS_D.Hobart]: AUS_R.TA,
+	[AUS_D.Horsham]: AUS_R.VI,
+	[AUS_D.Ivanhoe]: AUS_R.NS,
+	[AUS_D.Kalgoorlie]: AUS_R.WA,
+	[AUS_D.Katherine]: AUS_R.NT,
+	[AUS_D.Kowanyama]: AUS_R.QL,
+	[AUS_D.Kununurra]: AUS_R.WA,
+	[AUS_D.Launceston]: AUS_R.TA,
+	[AUS_D.Meekatharra]: AUS_R.WA,
+	[AUS_D.Melbourne]: AUS_R.VI,
+	[AUS_D.Mildura]: AUS_R.VI,
+	[AUS_D.Millewa]: AUS_R.WA,
+	[AUS_D.Moe]: AUS_R.VI,
+	[AUS_D.Newcastle]: AUS_R.NS,
+	[AUS_D.Nockatunga]: AUS_R.QL,
+	[AUS_D.Oodnadatta]: AUS_R.SA,
+	[AUS_D.Orbost]: AUS_R.VI,
+	[AUS_D.Parkes]: AUS_R.NS,
+	[AUS_D.Perth]: AUS_R.WA,
+	[AUS_D['Port Agusta']]: AUS_R.SA,
+	[AUS_D['Port Hedland']]: AUS_R.WA,
+	[AUS_D['Port Lincoln']]: AUS_R.SA,
+	[AUS_D.Portland]: AUS_R.VI,
+	[AUS_D.Rockhampton]: AUS_R.QL,
+	[AUS_D.Shepparton]: AUS_R.VI,
+	[AUS_D.Smithton]: AUS_R.TA,
+	[AUS_D['Swan Hill']]: AUS_R.VI,
+	[AUS_D.Sydney]: AUS_R.NS,
+	[AUS_D['Tennant Creek']]: AUS_R.NT,
+	[AUS_D.Townsville]: AUS_R.QL,
+	[AUS_D.Weipa]: AUS_R.QL,
+	[AUS_D.Wodonga]: AUS_R.VI,
+	[AUS_D.Woomera]: AUS_R.SA,
+	[AUS_D.Wyndham]: AUS_R.WA,
+	[AUS_D.Zeehan]: AUS_R.TA,
+}
 
 //lookups are [even, odd]
 const AUS_lookup_region = [
@@ -569,7 +755,7 @@ const AUS_lookup_dest = {
 			AUS_D.Bunbury,
 			AUS_D.Meekatharra,
 		],
-		[,,AUS_D["Giles Met Station"],
+		[,,AUS_D["Giles Met Stn."],
 			AUS_D.Millewa,
 			AUS_D.Esperance,
 			AUS_D.Geraldton,
@@ -759,7 +945,7 @@ Eucla,,,,,,,,,,,,,,,,,,,,,,,0,230,270,165,185,350,220,185,80,340,370,305,315,140
 Exmouth,,,,,,,,,,,,,,,,,,,,,,,,0,410,60,245,490,360,325,150,255,430,195,455,125,410,360,80,440,410,350,270,420,340,115,255,80,270,385,455,385,465,350,405,335,510,525,395,230,185,475
 Geelong,,,,,,,,,,,,,,,,,,,,,,,,,0,350,370,95,55,105,265,430,405,440,60,325,20,90,335,45,150,195,235,70,100,325,160,375,210,45,265,45,70,70,125,360,340,475,80,185,440,80
 Geraldton,,,,,,,,,,,,,,,,,,,,,,,,,,0,185,430,300,265,90,280,445,220,395,60,350,300,20,375,350,290,210,360,280,55,195,105,210,325,395,325,405,290,340,305,445,550,335,165,210,410
-Giles Met Station,,,,,,,,,,,,,,,,,,,,,,,,,,,0,445,315,280,105,235,305,230,410,125,370,315,165,395,370,305,165,375,300,165,210,175,230,340,395,340,420,305,360,150,335,410,350,185,230,430
+Giles Met Stn.,,,,,,,,,,,,,,,,,,,,,,,,,,,0,445,315,280,105,235,305,230,410,125,370,315,165,395,370,305,165,375,300,165,210,175,230,340,395,340,420,305,360,150,335,410,350,185,230,430
 Hobart,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,130,175,340,500,475,515,35,405,80,165,410,105,175,265,315,130,160,405,235,455,290,130,305,105,80,140,150,430,385,515,140,265,515,90
 Horsham,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,60,210,385,360,385,95,270,55,45,280,80,150,150,185,105,85,270,105,325,160,25,245,60,105,25,140,305,325,455,105,130,385,115
 Ivanhoe,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,175,335,305,350,140,235,95,60,245,125,90,95,150,95,25,235,70,290,125,90,185,70,150,35,80,265,265,395,70,95,350,160
