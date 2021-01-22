@@ -258,6 +258,10 @@ function destination(previous, region) {
 	}
 	
 	if(previous === region) {
+		if (map == MAPS.USA2) {
+			//re-roll instead of choosing destination
+			return destination(previous);
+		}
 		set(getByID("map"), "visibility", "visible");
 		return false;
 	}
