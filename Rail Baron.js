@@ -226,7 +226,7 @@ function destination(previous, region) {
 		destLookup = DestLookup[map];
 
 	if (region == undefined) {
-		if (map == MAPS.USA2 && [3, 4, 5, 6, 17].includes(roll() + roll() + roll())) {
+		if (map == MAPS.USA2 && [4, 5, 6, 17].includes(roll() + roll() + roll())) {
 			region = USA2_R.CAN;
 		}
 		else{
